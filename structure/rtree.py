@@ -230,6 +230,13 @@ if __name__ == '__main__':
     # dataset = '/Users/guanli/Documents/codes/DL_Rtree/dataset/test_tree_building.csv'
     # rtree = Rtree(dataset, dim=2, level=3)
 
+    inputfile = "/Users/guanli/Documents/datasets/RLRtree/trees/Z_uniform_160000_1_2_.csv"
+    outputfile = "/Users/guanli/Documents/datasets/RLRtree/newtrees/Z_uniform_160000_1_3_DDPG.csv"
+    dim = 2
+    level = 3
+    pagesize = 108
+    algorithm = "DDPG"
+
     print(inputfile, outputfile, dim, level, pagesize)
     # dataset = '/Users/guanli/Documents/codes/DL_Rtree/dataset/Z_normal_2000000_.csv'
     rtree = Rtree(inputfile, dim=dim, level=level, pagesize=pagesize, output_file=outputfile)
