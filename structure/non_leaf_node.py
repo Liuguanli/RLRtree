@@ -4,6 +4,9 @@ from structure.node import Node
 import numpy as np
 import sys
 
+ACTION_LEFT = -1
+ACTION_RIGHT = 1
+
 
 class NonLeafNode(Node):
 
@@ -74,15 +77,22 @@ class NonLeafNode(Node):
     def get_actions(self, level=0):
         return len(self.all_nodes[level]) - 1
 
+    def get_total_area(self):
+        total_area = 0
+        for child in self.nodes:
+            coordinates = child.get_coordinates()
+            total_area += self.cal_area(self.cal_MBR(coordinates))
+        return total_area
+
     def step_move(self, observation, action):
         left_node = self.nodes[action]
         right_node = self.nodes[action + 1]
 
         move_right_able = False
         move_left_able = False
-        if len(left_node.nodes) < self.pagesize and len(right_node.nodes) > self.pagesize / 2:
+        if len(left_node.nodes) > self.pagesize / 2 and len(right_node.nodes) < self.pagesize:
             move_left_able = True
-        if len(right_node.nodes) < self.pagesize and len(left_node.nodes) > self.pagesize / 2:
+        if len(right_node.nodes) > self.pagesize / 2 and len(left_node.nodes) < self.pagesize:
             move_right_able = True
 
         # print('left_node', left_node.get_coordinates())
@@ -104,10 +114,9 @@ class NonLeafNode(Node):
             temp = np.array(left_node_coordinates)[:, -1].reshape(self.dim * 2, 1)
             right = np.array(right_node_coordinates)
             right = np.hstack((temp, right))
-            # print('cal_MBR', self.cal_MBR(left))
-            # print('cal_MBR', self.cal_MBR(right))
-            move_left_area = self.cal_area(self.cal_MBR(left)) + self.cal_area(self.cal_MBR(right))
-            mbr_left = self.cal_MBR(left)  # after moving out, re-cal the Mbr
+            mbr_left_move_left = self.cal_MBR(left)  # after moving out, re-cal the Mbr
+            mbr_right_move_left = self.cal_MBR(right)
+            move_left_area = self.cal_area(mbr_left_move_left) + self.cal_area(mbr_right_move_left)
 
         # move right
         if move_right_able:
@@ -117,34 +126,52 @@ class NonLeafNode(Node):
             left = np.hstack((left, temp))
             # print('cal_MBR', self.cal_MBR(left))
             # print('cal_MBR', self.cal_MBR(right))
-            move_right_area = self.cal_area(self.cal_MBR(left)) + self.cal_area(self.cal_MBR(right))
-            mbr_right = self.cal_MBR(right)  # after moving out, re-cal the Mbr
+
+            mbr_left_move_right = self.cal_MBR(left)  # after moving out, re-cal the Mbr
+            mbr_right_move_right = self.cal_MBR(right)
+            move_right_area = self.cal_area(mbr_left_move_right) + self.cal_area(mbr_right_move_right)
 
         # TODO if changed parent and other parameters should be changed
 
         reward = 0
         move_action = 0
+
         if move_left_area < not_move_area:
             reward = not_move_area - move_left_area
             move_action = -1
 
-        if move_right_area < not_move_area:
-            if reward < (not_move_area - move_right_area):
-                reward = not_move_area - move_right_area
-                move_action = 1
+        # if move_right_area < not_move_area:
+        #     if reward < (not_move_area - move_right_area):
+        #         reward = not_move_area - move_right_area
+        #         move_action = 1
 
-        if move_action == -1:
+        # this is a trial
+        if move_left_area < move_right_area:
+            if move_left_able:
+                move_action = ACTION_LEFT
+                reward = not_move_area - move_left_area
+        else:
+            if move_right_able:
+                move_action = ACTION_RIGHT
+                reward = not_move_area - move_right_area
+        # print('reward', reward)
+        #
+        # print('not_move_area', not_move_area, 'move_left_area', move_left_area, 'move_right_area', move_right_area,
+        #       'move_action', move_action)
+        # print('total_area before', self.get_total_area())
+
+        if move_action == ACTION_LEFT:
+            temp = left_node.move_out(len(left_node.nodes) - 1)
+            left_node.mbr = mbr_left_move_left
+            temp.parent = right_node
+            right_node.move_in(temp)
+        if move_action == ACTION_RIGHT:
             temp = right_node.move_out()
-            right_node.mbr = mbr_right
+            right_node.mbr = mbr_right_move_right
             temp.parent = left_node
             left_node.move_in(temp, len(left_node.nodes))
 
-        if move_action == 1:
-            temp = left_node.move_out(len(left_node.nodes) - 1)
-            left_node.mbr = mbr_left
-            temp.parent = right_node
-            right_node.move_in(temp)
-
+        # print('total_area after', self.get_total_area())
         done = False
         observation[action] += move_action
 
@@ -168,6 +195,11 @@ class NonLeafNode(Node):
     def move_in(self, node, index=0):
         self.nodes.insert(index, node)
         self.update_mbr(node.mbr)
+
+    def update_mbr_after_move_out(self):
+        self.mbr = None
+        for item in self.nodes:
+            self.update_mbr(item.mbr)
 
     def move_out(self, index=0):
         result = self.nodes.pop(index)

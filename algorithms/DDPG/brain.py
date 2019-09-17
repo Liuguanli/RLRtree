@@ -26,7 +26,7 @@ MEMORY_CAPACITY = 10000
 BATCH_SIZE = 32
 
 RENDER = False
-OUTPUT_GRAPH = True
+OUTPUT_GRAPH = False
 ENV_NAME = 'Pendulum-v0'
 
 
@@ -44,21 +44,21 @@ class Actor(object):
         self.S = S
         self.S_ = S_
 
-        with tf.variable_scope('Actor'):
+        with tf.compat.v1.variable_scope('Actor'):
             # input s, output a
             self.a = self._build_net(self.S, scope='eval_net', trainable=True)
 
             # input s_, output a, get a_ for critic
             self.a_ = self._build_net(self.S_, scope='target_net', trainable=False)
 
-        self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/eval_net')
-        self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/target_net')
+        self.e_params = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope='Actor/eval_net')
+        self.t_params = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope='Actor/target_net')
 
         if self.replacement['name'] == 'hard':
             self.t_replace_counter = 0
-            self.hard_replace = [tf.assign(t, e) for t, e in zip(self.t_params, self.e_params)]
+            self.hard_replace = [tf.compat.v1.assign(t, e) for t, e in zip(self.t_params, self.e_params)]
         else:
-            self.soft_replace = [tf.assign(t, (1 - self.replacement['tau']) * t + self.replacement['tau'] * e)
+            self.soft_replace = [tf.compat.v1.assign(t, (1 - self.replacement['tau']) * t + self.replacement['tau'] * e)
                                  for t, e in zip(self.t_params, self.e_params)]
 
     def _build_net(self, s, scope, trainable):
@@ -99,7 +99,7 @@ class Actor(object):
             self.policy_grads = tf.gradients(ys=self.a, xs=self.e_params, grad_ys=a_grads)
 
         with tf.variable_scope('A_train'):
-            opt = tf.train.AdamOptimizer(-self.lr)  # (- learning rate) for ascent policy
+            opt = tf.compat.v1.train.AdamOptimizer(-self.lr)  # (- learning rate) for ascent policy
             self.train_op = opt.apply_gradients(zip(self.policy_grads, self.e_params))
 
 
@@ -126,8 +126,10 @@ class Critic(object):
             self.q_ = self._build_net(self.S_, a_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
-            self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Critic/eval_net')
-            self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Critic/target_net')
+            self.e_params = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES,
+                                                        scope='Critic/eval_net')
+            self.t_params = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES,
+                                                        scope='Critic/target_net')
 
         with tf.variable_scope('target_q'):
             self.target_q = self.R + self.gamma * self.q_
@@ -136,7 +138,7 @@ class Critic(object):
             self.loss = tf.reduce_mean(tf.squared_difference(self.target_q, self.q))
 
         with tf.variable_scope('C_train'):
-            self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
+            self.train_op = tf.compat.v1.train.AdamOptimizer(self.lr).minimize(self.loss)
 
         with tf.variable_scope('a_grad'):
             self.a_grads = tf.gradients(self.q, a)[0]  # tensor of gradients of each sample (None, a_dim)
@@ -155,8 +157,8 @@ class Critic(object):
 
             with tf.variable_scope('l1'):
                 n_l1 = 30
-                w1_s = tf.get_variable('w1_s', [self.s_dim, n_l1], initializer=init_w, trainable=trainable)
-                w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1], initializer=init_w, trainable=trainable)
+                w1_s = tf.compat.v1.get_variable('w1_s', [self.s_dim, n_l1], initializer=init_w, trainable=trainable)
+                w1_a = tf.compat.v1.get_variable('w1_a', [self.a_dim, n_l1], initializer=init_w, trainable=trainable)
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b, trainable=trainable)
                 net = tf.nn.relu(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1)
 
@@ -197,7 +199,7 @@ class Memory(object):
 
 class DeepDeterministicPolicyGradient(algorithm):
     def __init__(self, action_dim, state_dim, action_bound, LR_A, LR_C, REPLACEMENT, GAMMA, OUTPUT_GRAPH=False,
-                 BATCH_SIZE=32):
+                 BATCH_SIZE=32, EPSILON=0.1):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.action_bound = action_bound
@@ -206,18 +208,19 @@ class DeepDeterministicPolicyGradient(algorithm):
         self.REPLACEMENT = REPLACEMENT
         self.GAMMA = GAMMA
         self.BATCH_SIZE = BATCH_SIZE
+        self.EPSILON = EPSILON
 
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
 
         # all placeholder for tf
         with tf.name_scope('S'):
-            S = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
+            S = tf.compat.v1.placeholder(tf.float32, shape=[None, state_dim], name='s')
         with tf.name_scope('R'):
-            R = tf.placeholder(tf.float32, [None, 1], name='r')
+            R = tf.compat.v1.placeholder(tf.float32, [None, 1], name='r')
         with tf.name_scope('S_'):
-            S_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
+            S_ = tf.compat.v1.placeholder(tf.float32, shape=[None, state_dim], name='s_')
 
-        self.sess = tf.Session()
+        self.sess = tf.compat.v1.Session()
         self.actor = Actor(self.sess, self.action_dim, self.action_bound, self.LR_A, self.REPLACEMENT, S, S_)
         self.critic = Critic(self.sess, self.state_dim, self.action_dim, self.LR_C, self.GAMMA, self.REPLACEMENT,
                              self.actor.a, self.actor.a_, S, S_, R)
@@ -230,8 +233,11 @@ class DeepDeterministicPolicyGradient(algorithm):
             tf.summary.FileWriter("logs/", self.sess.graph)
 
     def choose_action(self, observation):
-        a = self.actor.choose_action(observation)
-        return a
+        if np.random.uniform() < self.EPSILON:
+            action = np.random.randint(0, self.action_dim)
+        else:
+            action = self.actor.choose_action(observation)
+        return action
 
     def store_transition(self, s, a, r, s_):
         self.M.store_transition(s, a, r / 10, s_)
