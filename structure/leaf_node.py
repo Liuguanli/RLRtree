@@ -4,6 +4,10 @@ from structure.node import Node
 import numpy as np
 import sys
 
+ACTION_LEFT = -1
+ACTION_RIGHT = 1
+
+
 class LeafNode(Node):
     def __init__(self, dim, pagesize, order):
         super(LeafNode, self).__init__()
@@ -24,14 +28,12 @@ class LeafNode(Node):
         locations = copy.deepcopy(location)
         if self.mbr is None or len(self.mbr) == 0:
             self.mbr = locations * self.dim
-            # print('leaf', locations)
         else:
-            length = len(locations)
-            for i in range(length):
+            for i in range(self.dim):
                 if locations[i] < self.mbr[i]:
                     self.mbr[i] = locations[i]
-                elif locations[i] > self.mbr[i + length]:
-                    self.mbr[i + length] = locations[i]
+                if locations[i] > self.mbr[i + self.dim]:
+                    self.mbr[i + self.dim] = locations[i]
             # print('leaf else', self.mbr)
 
     def update(self):
@@ -63,7 +65,7 @@ class LeafNode(Node):
     def get_actions(self, level=0):
         return len(self.all_nodes[level]) - 1
 
-    def step_move(self, observation, action):
+    def step_move(self, observation, action, strategy='radical'):
         left_node = self.nodes[action]
         right_node = self.nodes[action + 1]
 
@@ -79,24 +81,22 @@ class LeafNode(Node):
         left_node_coordinates = left_node.get_coordinates()
         right_node_coordinates = right_node.get_coordinates()
         # not move
-        not_move_area = self.cal_area(self.cal_MBR(left_node_coordinates)) + self.cal_area(
+        not_move_area = self.get_reward(self.cal_MBR(left_node_coordinates)) + self.get_reward(
             self.cal_MBR(right_node_coordinates))
+        # print("not_move_area", not_move_area)
 
         move_left_area = sys.float_info.max
         move_right_area = sys.float_info.max
 
-        mbr_left = None
-        mbr_right = None
         # move left
         if move_left_able:
             left = np.array(left_node_coordinates)[:, 0:-1]
             temp = np.array(left_node_coordinates)[:, -1].reshape(self.dim * 2, 1)
             right = np.array(right_node_coordinates)
             right = np.hstack((temp, right))
-            # print('cal_MBR', self.cal_MBR(left))
-            # print('cal_MBR', self.cal_MBR(right))
-            move_left_area = self.cal_area(self.cal_MBR(left)) + self.cal_area(self.cal_MBR(right))
-            mbr_left = self.cal_MBR(left)  # after moving out, re-cal the Mbr
+            mbr_left_move_left = self.cal_MBR(left)  # after moving out, re-cal the Mbr
+            mbr_right_move_left = self.cal_MBR(right)
+            move_left_area = self.get_reward(mbr_left_move_left) + self.get_reward(mbr_right_move_left)
 
         # move right
         if move_right_able:
@@ -104,41 +104,83 @@ class LeafNode(Node):
             temp = np.array(right_node_coordinates)[:, 0].reshape(self.dim * 2, 1)
             left = np.array(left_node_coordinates)
             left = np.hstack((left, temp))
-            # print('cal_MBR', self.cal_MBR(left))
-            # print('cal_MBR', self.cal_MBR(right))
-            move_right_area = self.cal_area(self.cal_MBR(left)) + self.cal_area(self.cal_MBR(right))
-            mbr_right = self.cal_MBR(right)  # after moving out, re-cal the Mbr
+            mbr_left_move_right = self.cal_MBR(left)  # after moving out, re-cal the Mbr
+            mbr_right_move_right = self.cal_MBR(right)
+            move_right_area = self.get_reward(mbr_left_move_right) + self.get_reward(mbr_right_move_right)
 
         # TODO if changed parent and other parameters should be changed
 
         reward = 0
         move_action = 0
-        if move_left_area < not_move_area:
-            reward = not_move_area - move_left_area
-            move_action = -1
+        if strategy == 'radical':
+            # this is a trial
+            if move_left_area < move_right_area:
+                if move_left_able:
+                    move_action = ACTION_LEFT
+                    reward = not_move_area - move_left_area
+            else:
+                if move_right_able:
+                    move_action = ACTION_RIGHT
+                    reward = not_move_area - move_right_area
+        else:
+            if move_left_area < not_move_area:
+                reward = not_move_area - move_left_area
+                move_action = -1
 
-        if move_right_area < not_move_area:
-            if reward < (not_move_area - move_right_area):
-                reward = not_move_area - move_right_area
-                move_action = 1
+            if move_right_area < not_move_area:
+                if reward < (not_move_area - move_right_area):
+                    reward = not_move_area - move_right_area
+                    move_action = 1
 
-        if move_action == -1:
-            temp = right_node.move_out()
-            right_node.mbr = mbr_right
-            temp.parent = left_node
-            left_node.move_in(temp, len(left_node.nodes))
-
-        if move_action == 1:
+        if move_action == ACTION_LEFT:
             temp = left_node.move_out(len(left_node.nodes) - 1)
-            left_node.mbr = mbr_left
+            left_node.mbr = mbr_left_move_left
             temp.parent = right_node
             right_node.move_in(temp)
+        if move_action == ACTION_RIGHT:
+            temp = right_node.move_out()
+            right_node.mbr = mbr_right_move_right
+            temp.parent = left_node
+            left_node.move_in(temp, len(left_node.nodes))
 
         done = False
         observation[action] += move_action
 
         # print('action', action, 'move_action', move_action, 'reward', reward)
         return observation, reward, done
+
+    def interact(self, another_mbr):
+        points = [[another_mbr[0], another_mbr[1]], [another_mbr[0], another_mbr[3]], [another_mbr[2], another_mbr[1]],
+                  [another_mbr[2], another_mbr[3]]]
+
+        dim = int(len(another_mbr) / 2)
+
+        for point in points:
+            if self.mbr[0] <= point[0] <= self.mbr[0 + dim] and self.mbr[1] <= point[1] <= self.mbr[1 + dim]:
+                return True
+
+        points = [[self.mbr[0], self.mbr[1]], [self.mbr[0], self.mbr[3]], [self.mbr[2], self.mbr[1]],
+                  [self.mbr[2], self.mbr[3]]]
+
+        for point in points:
+            if another_mbr[0] <= point[0] <= another_mbr[0 + dim] and another_mbr[1] <= point[1] <= another_mbr[1 + dim]:
+                return True
+        return False
+
+    def get_reward(self, mbr):
+        return self.get_overlap(mbr)
+
+    def get_overlap(self, mbr):
+        retult = 0
+        for node in self.nodes:
+            overlap = 1.0
+            # print(mbr, node.mbr, node.interact(mbr))
+            if node.interact(mbr):
+                dim = int(len(mbr) / 2)
+                for index in range(dim):
+                    overlap *= (max(node.mbr[index + dim], mbr[index + dim]) - min(node.mbr[index], mbr[index]))
+                retult += overlap
+        return retult
 
     def cal_area(self, mbr):
         cost = 1

@@ -1,10 +1,14 @@
 from __future__ import print_function
-
-import platform
-
-from pylab import *
+import sys
+import os
+from pprint import pprint
+import sys, getopt
 
 # print = pprint
+
+import matplotlib.pyplot as plt
+import platform
+from pylab import *
 
 curPath = os.path.abspath(os.path.dirname(__file__))
 rootPath = os.path.split(curPath)[0]
@@ -137,7 +141,6 @@ def draw(xlabels, ys, xlabel, ylabel, name, type='time'):
 
     plt.savefig(name + ".png", format='png', bbox_inches='tight')
     plt.savefig(name + ".eps", format='eps', bbox_inches='tight')
-    print(name)
 
     # plt.show()
     clf()  # 清图。
