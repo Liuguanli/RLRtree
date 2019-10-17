@@ -208,7 +208,6 @@ def config_data_vary_dataset(window=10000, dim=2, distribution='uniform', type='
         draw(xlabels, template, "Data set size $(10^4)$", "Page Access",
              (figure_name_template_window % (distribution, window, dim, type)), type=type)
 
-
 if __name__ == '__main__':
     for distribution in distributions:
         for type in types:
