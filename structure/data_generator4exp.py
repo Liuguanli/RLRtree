@@ -288,19 +288,14 @@ def getSkewedPoints(num, a, filename, dim):
         locations = []
         for i in range(dim):
             locations.append(sees.run(locations_tf[i]))
-
-
-    while num >= 1000000:
-        print(num)
-        name = filename % (num, a, dim)
-        with open(name, "w") as fo:
-            for i in range(num):
-                node_string = ''
-                for j in range(dim - 1):
-                    node_string = node_string + str(locations[j][i][0]) + ","
-                node_string = node_string + str(locations[dim - 1][i][0] ** a) + "," + str(i) + "\n"
-                fo.write(node_string)
-        num = int(num / 2)
+    name = filename % (num, a, dim)
+    with open(name, "w") as fo:
+        for i in range(num):
+            node_string = ''
+            for j in range(dim - 1):
+                node_string = node_string + str(locations[j][i][0]) + ","
+            node_string = node_string + str(locations[dim - 1][i][0] ** a) + "," + str(i) + "\n"
+            fo.write(node_string)
 
 def parser(argv):
     try:
@@ -324,14 +319,16 @@ def parser(argv):
 if __name__ == '__main__':
     # getUniformRandomPoints(80000, 10)
     # get_tf_normalrandomPoints(8000000, 10)
-    distribution, size, skewness, filename, dim = parser(sys.argv[1:])
-    print(distribution, size, skewness, filename, dim)
-    if distribution == 'normal':
-        filename = "D:\\datasets\\RLRtree\\raw\\normal_%d_1_%d_.csv"
-        getNormalPoints(size, filename, dim)
-    elif distribution == 'uniform':
-        filename = "D:\\datasets\\RLRtree\\raw\\normal_%d_1_%d_.csv"
-        getUniformPoints(size, filename, dim)
-    elif distribution == 'skewed':
-        filename = "D:\\datasets\\RLRtree\\raw\\normal_%d_%d_%d_.csv"
-        getSkewedPoints(size, skewness, filename, dim)
+    filename = "D:\\datasets\\RLRtree\\raw\\uniform_%d_1_%d_.csv"
+    getUniformPoints(128000000, filename, 2)
+    filename = "D:\\datasets\\RLRtree\\raw\\skewed_%d_%d_%d_.csv"
+    getSkewedPoints(32000000, 1, filename, 2)
+    getSkewedPoints(32000000, 3, filename, 2)
+    getSkewedPoints(32000000, 5, filename, 2)
+    getSkewedPoints(32000000, 7, filename, 2)
+    getSkewedPoints(32000000, 9, filename, 2)
+    getSkewedPoints(16000000, 1, filename, 2)
+    getSkewedPoints(16000000, 3, filename, 2)
+    getSkewedPoints(16000000, 5, filename, 2)
+    getSkewedPoints(16000000, 7, filename, 2)
+    getSkewedPoints(16000000, 9, filename, 2)
